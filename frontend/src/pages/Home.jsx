@@ -58,7 +58,7 @@ export default function Home() {
     <div className="page">
       <header className="hero">
         <span className="eyebrow">Reel Cut</span>
-        <h1>Turn one long video into your best 10&ndash;20 Shorts</h1>
+        <h1>Turn one long video into your best 10&ndash;20 Shorts of 2-5 Min video Clip</h1>
         <p className="sub">
           Drop in a video you own the rights to. The editor finds the strongest
           moments, writes captions, credits you, and hands back vertical clips
