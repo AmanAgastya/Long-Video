@@ -24,11 +24,11 @@ const MIN_CLIP_SECONDS = Number(process.env.MIN_CLIP_SECONDS || 140);
 // story, riff, or explanation is free to use the full range when the
 // content calls for it. Bounds set to a 140s (2m20s)-340s (5m40s) range.
 const MAX_CLIP_SECONDS = Number(process.env.MAX_CLIP_SECONDS || 340);
-// Every job should produce at least 3 clips and, for longer source videos,
+// Every job should produce at least 5 clips and, for longer source videos,
 // as many as 15 — the analyzer scales the actual requested count between
 // these two bounds based on the source video's duration (see
 // analyzeBestMoments below), it never overshoots MAX_CLIPS_PER_JOB.
-const MIN_CLIPS_PER_JOB = Number(process.env.MIN_CLIPS_PER_JOB || 3);
+const MIN_CLIPS_PER_JOB = Number(process.env.MIN_CLIPS_PER_JOB || 5);
 const MAX_CLIPS_PER_JOB = Number(process.env.MAX_CLIPS_PER_JOB || 15);
 // Smaller chunks use fewer tokens per Groq request (roughly half of the
 // old 18000-char default) and produce more, finer-grained chunks for a
@@ -604,11 +604,22 @@ export async function analyzeBestMoments(transcript, { ownerCreditName, sourceFi
 
   if (rankedClips.length) return rankedClips;
 
+  // Last-resort fallback: every chunk failed to produce a usable ranked
+  // clip (e.g. the transcript came back too sparse/gappy for the LLM to
+  // find a moment - see the retry/skip logs from transcriber.js). Still
+  // give the user *something* rather than nothing, but caption is a
+  // required field on the Clip model (and Mongoose's default `required`
+  // check rejects "" for strings, not just null/undefined) - this used to
+  // be caption: "", which meant Clip.create() in jobProcessor.js threw
+  // "Clip validation failed: caption: Path `caption` is required." and
+  // took the entire job down with it, right as it was about to recover.
+  // A non-empty placeholder lets the clip actually save so the job
+  // completes; the user can always edit/regenerate the caption afterward.
   return [
     {
       start: videoStart,
       end: Math.min(videoStart + MAX_CLIP_SECONDS, videoEnd),
-      caption: "",
+      caption: "Check this out 👀",
       hashtags: [],
       rankScore: 0.1,
       creditLine: `Original video by ${ownerCreditName}`,
