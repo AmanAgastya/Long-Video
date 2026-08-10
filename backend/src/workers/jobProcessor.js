@@ -162,7 +162,12 @@ export async function processJob(jobId) {
         job: job._id,
         startSeconds: moment.start,
         endSeconds: moment.end,
-        caption: String(moment.caption || ""),
+        // Mongoose's `required: true` rejects "" as well as null/undefined
+        // for String fields (see analyzer.js's last-resort fallback for
+        // where this bit us before) - falling back to a placeholder here
+        // too means a stray empty caption from any future code path fails
+        // safe (clip still saves) instead of taking the whole job down.
+        caption: String(moment.caption || "").trim() || "Check this out 👀",
         hashtags: moment.hashtags || [],
         creditLine: moment.creditLine,
         rankScore: moment.rankScore,
