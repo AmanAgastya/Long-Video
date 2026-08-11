@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getJob } from "../api/client.js";
+import { getJob, clipDownloadUrl } from "../api/client.js";
 import ClipCard from "../components/ClipCard.jsx";
+
+// Spacing auto-triggered downloads out instead of firing them all in the
+// same tick - browsers (Chrome in particular) treat a burst of
+// simultaneous programmatic downloads as spammy and silently block
+// everything past the first few, which would make "auto-download" work
+// for only 2-3 of a 15-clip job with no visible error.
+const AUTO_DOWNLOAD_STAGGER_MS = 700;
 
 const STAGES = ["queued", "downloading", "transcribing", "analyzing", "clipping", "completed"];
 
@@ -20,6 +27,36 @@ export default function JobStatus() {
   const [job, setJob] = useState(null);
   const [clips, setClips] = useState([]);
   const [error, setError] = useState("");
+  const [autoDownloading, setAutoDownloading] = useState(false);
+  const hasAutoDownloadedRef = useRef(false);
+
+  // Once the job finishes, automatically download every rendered clip
+  // instead of waiting for the user to click each "Download clip" button
+  // one at a time. Runs once per job (guarded by the ref, since `clips`
+  // updates on every poll tick while the job is still completing).
+  useEffect(() => {
+    if (job?.status !== "completed") return;
+    if (hasAutoDownloadedRef.current) return;
+    const renderedClips = clips.filter((clip) => clip.status === "rendered");
+    if (!renderedClips.length) return;
+
+    hasAutoDownloadedRef.current = true;
+    setAutoDownloading(true);
+
+    const timers = renderedClips.map((clip, i) =>
+      setTimeout(() => {
+        const link = document.createElement("a");
+        link.href = clipDownloadUrl(job._id, clip._id);
+        link.download = "";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        if (i === renderedClips.length - 1) setAutoDownloading(false);
+      }, i * AUTO_DOWNLOAD_STAGGER_MS)
+    );
+
+    return () => timers.forEach(clearTimeout);
+  }, [job?.status, job?._id, clips]);
 
   useEffect(() => {
     let active = true;
@@ -109,6 +146,10 @@ export default function JobStatus() {
             : "Finding the best moments…"}
         </h1>
       </header>
+
+      {job.status === "completed" && autoDownloading && (
+        <p className="sub timing">Downloading your clips automatically&hellip;</p>
+      )}
 
       {error && <p className="error">{error}</p>}
 
